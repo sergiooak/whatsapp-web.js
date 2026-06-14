@@ -694,33 +694,43 @@ exports.LoadUtils = () => {
         );
         const filehash = await window.WWebJS.getFileHash(file);
         const thumbnailSha256 = await window.WWebJS.getFileHash(thumbnail);
-        const mediaKey = await window.WWebJS.generateHash(32);
-        const uploadStickerPack = (blob) => {
-            const controller = new AbortController();
 
-            return window.require('WAWebUploadManager').encryptAndUpload({
+        const uploadMedia = ({ blob, type, mediaKey, mediaKeyTimestamp }) =>
+            window.require('WAWebUploadManager').encryptAndUpload({
                 blob,
-                type: 'sticker-pack',
-                signal: controller.signal,
-                mediaKey,
+                type,
+                signal: new AbortController().signal,
+                // `encryptAndUpload` ignores a provided mediaKey on a fresh
+                // upload, but honors it when a mediaKeyTimestamp is also given
+                // (reupload semantics).
+                ...(mediaKey ? { mediaKey, mediaKeyTimestamp } : {}),
                 uploadQpl: window
                     .require('WAWebStartMediaUploadQpl')
-                    .startMediaUploadQpl({
-                        entryPoint: 'MediaUpload',
-                    }),
+                    .startMediaUploadQpl({ entryPoint: 'MediaUpload' }),
             });
-        };
 
-        const [uploadedInfo, thumbnailInfo] = await Promise.all([
-            uploadStickerPack(file),
-            uploadStickerPack(thumbnail),
-        ]);
+        // Upload the pack first; it mints its own mediaKey/timestamp.
+        const uploadedInfo = await uploadMedia({
+            blob: file,
+            type: 'sticker-pack',
+        });
+
+        // A sticker-pack message carries a single mediaKey (the pack's) and no
+        // separate thumbnail key, so the thumbnail must be encrypted with that
+        // same key, under the sticker-pack thumbnail media type, so the
+        // recipient can decrypt it and render the chat card preview.
+        const thumbnailInfo = await uploadMedia({
+            blob: thumbnail,
+            type: 'thumbnail-sticker-pack',
+            mediaKey: uploadedInfo.mediaKey,
+            mediaKeyTimestamp: uploadedInfo.mediaKeyTimestamp,
+        });
 
         return {
             directPath: uploadedInfo.directPath,
             encFilehash: uploadedInfo.encFilehash,
             filehash,
-            mediaKey: uploadedInfo.mediaKey || mediaKey,
+            mediaKey: uploadedInfo.mediaKey,
             mediaKeyTimestamp: uploadedInfo.mediaKeyTimestamp,
             size: file.size,
             type: 'sticker-pack',
@@ -731,15 +741,11 @@ exports.LoadUtils = () => {
             stickerPackPublisher: stickerPackInfo.stickerPackPublisher,
             packDescription: stickerPackInfo.stickerPackDescription,
             stickerPackSize: stickerPackInfo.stickerPackSize,
-            stickerPackOrigin: stickerPackInfo.stickerPackOrigin,
             stickers: stickerPackInfo.stickers,
             trayIconFileName: stickerPackInfo.trayIconFileName,
             thumbnailDirectPath: thumbnailInfo.directPath,
             thumbnailEncSha256: thumbnailInfo.encFilehash,
             thumbnailSha256,
-            thumbnailHeight: stickerPackInfo.thumbnailHeight,
-            thumbnailWidth: stickerPackInfo.thumbnailWidth,
-            imageDataHash: stickerPackInfo.imageDataHash,
             notifyName: window.require('WAWebConnModel').Conn.pushname || '',
             messageSecret: window.crypto.getRandomValues(new Uint8Array(32)),
         };
@@ -1406,7 +1412,8 @@ exports.LoadUtils = () => {
         options = Object.assign(
             {
                 size: 252,
-                stickerSize: 104,
+                stickerSize: 108,
+                padding: 12,
                 mimetype: 'image/jpeg',
                 quality: 0.79,
             },
@@ -1432,24 +1439,31 @@ exports.LoadUtils = () => {
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, options.size, options.size);
 
-        const center = (options.size - options.stickerSize) / 2;
-        const edge = options.size - options.stickerSize;
+        // WhatsApp layout: 108×108 stickers, 12px padding + 12px gap.
+        // 1-sticker exception: left edge at x=10, vertically centered.
+        const p = options.padding; // 12
+        const s = options.stickerSize; // 108
+        const col0 = p; // 12
+        const col1 = p + s + p; // 132
+        const vcenter = (options.size - s) / 2; // 72
+        const row0 = p; // 12
+        const row1 = p + s + p; // 132
         const positions = {
-            1: [{ x: center, y: center }],
+            1: [{ x: vcenter + 10, y: vcenter }],
             2: [
-                { x: 0, y: center },
-                { x: edge, y: center },
+                { x: col0, y: vcenter },
+                { x: col1, y: vcenter },
             ],
             3: [
-                { x: 0, y: 0 },
-                { x: edge, y: 0 },
-                { x: center, y: edge },
+                { x: col0, y: row0 },
+                { x: col1, y: row0 },
+                { x: vcenter, y: row1 },
             ],
             4: [
-                { x: 0, y: 0 },
-                { x: edge, y: 0 },
-                { x: 0, y: edge },
-                { x: edge, y: edge },
+                { x: col0, y: row0 },
+                { x: col1, y: row0 },
+                { x: col0, y: row1 },
+                { x: col1, y: row1 },
             ],
         }[images.length];
 

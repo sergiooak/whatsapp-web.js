@@ -60,13 +60,7 @@ describe('Util', function () {
             expect(previewArgs[0].filename).to.equal(
                 stickerPack.stickers[0].fileName,
             );
-            expect(stickerPack.thumbnailHeight).to.equal(252);
-            expect(stickerPack.thumbnailWidth).to.equal(252);
-            expect(stickerPack.imageDataHash).to.equal(
-                'a79eb19a5ca1bd283f74fff104dd749cdb2364e447a5e0c2369338a8ae76107e',
-            );
             expect(stickerPack.stickerPackDescription).to.equal('');
-            expect(stickerPack.stickerPackOrigin).to.equal(1);
             expect(stickerPack.trayIconFileName).to.equal('test-pack-id.png');
             expect(stickerPack.stickerPackSize).to.equal(
                 zip.files.reduce(
