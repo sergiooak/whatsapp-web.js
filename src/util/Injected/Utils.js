@@ -151,7 +151,14 @@ exports.LoadUtils = () => {
         const { findLink } = window.require('WALinkify');
 
         let mediaOptions = {};
-        if (options.media) {
+        if (options.stickerPack) {
+            mediaOptions = await window.WWebJS.processStickerPackData(
+                options.stickerPack,
+            );
+            content = undefined;
+            delete options.stickerPack;
+            delete options.sendMediaAsStickerPack;
+        } else if (options.media) {
             mediaOptions =
                 options.sendMediaAsSticker && !isChannel && !isStatus
                     ? await window.WWebJS.processStickerData(options.media)
@@ -678,6 +685,70 @@ exports.LoadUtils = () => {
         };
 
         return stickerInfo;
+    };
+
+    window.WWebJS.processStickerPackData = async (stickerPackInfo) => {
+        const file = window.WWebJS.mediaInfoToFile(stickerPackInfo.media);
+        const thumbnail = window.WWebJS.mediaInfoToFile(
+            stickerPackInfo.thumbnail,
+        );
+        const filehash = await window.WWebJS.getFileHash(file);
+        const thumbnailSha256 = await window.WWebJS.getFileHash(thumbnail);
+
+        const uploadMedia = ({ blob, type, mediaKey, mediaKeyTimestamp }) =>
+            window.require('WAWebUploadManager').encryptAndUpload({
+                blob,
+                type,
+                signal: new AbortController().signal,
+                // `encryptAndUpload` ignores a provided mediaKey on a fresh
+                // upload, but honors it when a mediaKeyTimestamp is also given
+                // (reupload semantics).
+                ...(mediaKey ? { mediaKey, mediaKeyTimestamp } : {}),
+                uploadQpl: window
+                    .require('WAWebStartMediaUploadQpl')
+                    .startMediaUploadQpl({ entryPoint: 'MediaUpload' }),
+            });
+
+        // Upload the pack first; it mints its own mediaKey/timestamp.
+        const uploadedInfo = await uploadMedia({
+            blob: file,
+            type: 'sticker-pack',
+        });
+
+        // A sticker-pack message carries a single mediaKey (the pack's) and no
+        // separate thumbnail key, so the thumbnail must be encrypted with that
+        // same key, under the sticker-pack thumbnail media type, so the
+        // recipient can decrypt it and render the chat card preview.
+        const thumbnailInfo = await uploadMedia({
+            blob: thumbnail,
+            type: 'thumbnail-sticker-pack',
+            mediaKey: uploadedInfo.mediaKey,
+            mediaKeyTimestamp: uploadedInfo.mediaKeyTimestamp,
+        });
+
+        return {
+            directPath: uploadedInfo.directPath,
+            encFilehash: uploadedInfo.encFilehash,
+            filehash,
+            mediaKey: uploadedInfo.mediaKey,
+            mediaKeyTimestamp: uploadedInfo.mediaKeyTimestamp,
+            size: file.size,
+            type: 'sticker-pack',
+            filename: stickerPackInfo.stickerPackName,
+            stickerPackId: stickerPackInfo.stickerPackId,
+            name: stickerPackInfo.stickerPackName,
+            publisher: stickerPackInfo.stickerPackPublisher,
+            stickerPackPublisher: stickerPackInfo.stickerPackPublisher,
+            packDescription: stickerPackInfo.stickerPackDescription,
+            stickerPackSize: stickerPackInfo.stickerPackSize,
+            stickers: stickerPackInfo.stickers,
+            trayIconFileName: stickerPackInfo.trayIconFileName,
+            thumbnailDirectPath: thumbnailInfo.directPath,
+            thumbnailEncSha256: thumbnailInfo.encFilehash,
+            thumbnailSha256,
+            notifyName: window.require('WAWebConnModel').Conn.pushname || '',
+            messageSecret: window.crypto.getRandomValues(new Uint8Array(32)),
+        };
     };
 
     window.WWebJS.processMediaData = async (
@@ -1328,6 +1399,98 @@ exports.LoadUtils = () => {
             mimetype: options.mimetype,
             data: dataUrl.replace(`data:${options.mimetype};base64,`, ''),
         });
+    };
+
+    window.WWebJS.createStickerPackPreview = async (
+        mediaList,
+        options = {},
+    ) => {
+        if (!Array.isArray(mediaList) || !mediaList.length) {
+            throw new Error('Sticker pack preview requires media');
+        }
+
+        options = Object.assign(
+            {
+                size: 252,
+                stickerSize: 108,
+                padding: 12,
+                mimetype: 'image/jpeg',
+                quality: 0.79,
+            },
+            options,
+        );
+
+        const loadImage = (media) =>
+            new Promise((resolve, reject) => {
+                const img = new Image();
+                img.onload = () => resolve(img);
+                img.onerror = reject;
+                img.src = `data:${media.mimetype};base64,${media.data}`;
+            });
+
+        const images = await Promise.all(
+            mediaList.slice(0, 4).map((media) => loadImage(media)),
+        );
+        const canvas = document.createElement('canvas');
+        canvas.width = options.size;
+        canvas.height = options.size;
+
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, options.size, options.size);
+
+        // WhatsApp layout: 108×108 stickers, 12px padding + 12px gap.
+        // 1-sticker exception: left edge at x=10, vertically centered.
+        const p = options.padding; // 12
+        const s = options.stickerSize; // 108
+        const col0 = p; // 12
+        const col1 = p + s + p; // 132
+        const vcenter = (options.size - s) / 2; // 72
+        const row0 = p; // 12
+        const row1 = p + s + p; // 132
+        const positions = {
+            1: [{ x: vcenter + 10, y: vcenter }],
+            2: [
+                { x: col0, y: vcenter },
+                { x: col1, y: vcenter },
+            ],
+            3: [
+                { x: col0, y: row0 },
+                { x: col1, y: row0 },
+                { x: vcenter, y: row1 },
+            ],
+            4: [
+                { x: col0, y: row0 },
+                { x: col1, y: row0 },
+                { x: col0, y: row1 },
+                { x: col1, y: row1 },
+            ],
+        }[images.length];
+
+        images.forEach((img, index) => {
+            const ratio = Math.min(
+                options.stickerSize / img.width,
+                options.stickerSize / img.height,
+            );
+            const width = img.width * ratio;
+            const height = img.height * ratio;
+            const { x, y } = positions[index];
+
+            ctx.drawImage(
+                img,
+                x + (options.stickerSize - width) / 2,
+                y + (options.stickerSize - height) / 2,
+                width,
+                height,
+            );
+        });
+
+        const dataUrl = canvas.toDataURL(options.mimetype, options.quality);
+
+        return {
+            mimetype: options.mimetype,
+            data: dataUrl.replace(`data:${options.mimetype};base64,`, ''),
+        };
     };
 
     window.WWebJS.setPicture = async (chatId, media) => {

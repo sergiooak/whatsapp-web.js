@@ -1,7 +1,17 @@
-const { Client, Location, Poll, List, Buttons, LocalAuth } = require('./index');
+const {
+    Client,
+    Location,
+    Poll,
+    List,
+    Buttons,
+    LocalAuth,
+    MessageMedia,
+} = require('./index');
+
+const authClientId = process.env.WWEBJS_CLIENT_ID || 'real';
 
 const client = new Client({
-    authStrategy: new LocalAuth(),
+    authStrategy: new LocalAuth({ clientId: authClientId }),
     // proxyAuthentication: { username: 'username', password: 'password' },
     /**
      * This option changes the browser name from defined in user agent to custom.
@@ -265,6 +275,58 @@ client.on('message', async (msg) => {
                 sendAudioAsVoice: true,
             });
         }
+    } else if (msg.body === '!pack') {
+        // Download a few images and send them as a native sticker pack.
+        // No tray icon is provided here, so WhatsApp will use the first
+        // sticker as the pack's tray icon.
+        const imageUrls = [
+            'https://api.dicebear.com/9.x/shapes/png?seed=wwebjs-1&size=512',
+            'https://api.dicebear.com/9.x/shapes/png?seed=wwebjs-2&size=512',
+            'https://api.dicebear.com/9.x/shapes/png?seed=wwebjs-3&size=512',
+            'https://api.dicebear.com/9.x/shapes/png?seed=wwebjs-4&size=512',
+            'https://api.dicebear.com/9.x/shapes/png?seed=wwebjs-5&size=512',
+            'https://api.dicebear.com/9.x/shapes/png?seed=wwebjs-6&size=512',
+        ];
+        const medias = await Promise.all(
+            imageUrls.map((url) =>
+                MessageMedia.fromUrl(url, { unsafeMime: true }),
+            ),
+        );
+
+        await client.sendMessage(msg.from, medias, {
+            sendMediaAsStickerPack: true,
+            stickerPackName: 'WWebJS Pack',
+            stickerPackPublisher: 'whatsapp-web.js',
+        });
+    } else if (msg.body === '!packlogo') {
+        // Same pack as !pack, but with a custom tray icon (the
+        // whatsapp-web.js logo). When stickerPackTrayIcon is omitted,
+        // WhatsApp falls back to using the first sticker as the tray icon.
+        const imageUrls = [
+            'https://api.dicebear.com/9.x/shapes/png?seed=wwebjs-1&size=512',
+            'https://api.dicebear.com/9.x/shapes/png?seed=wwebjs-2&size=512',
+            'https://api.dicebear.com/9.x/shapes/png?seed=wwebjs-3&size=512',
+            'https://api.dicebear.com/9.x/shapes/png?seed=wwebjs-4&size=512',
+            'https://api.dicebear.com/9.x/shapes/png?seed=wwebjs-5&size=512',
+            'https://api.dicebear.com/9.x/shapes/png?seed=wwebjs-6&size=512',
+        ];
+        const trayIconUrl = 'https://wwebjs.dev/images/logo.png';
+
+        const medias = await Promise.all(
+            imageUrls.map((url) =>
+                MessageMedia.fromUrl(url, { unsafeMime: true }),
+            ),
+        );
+        const trayIcon = await MessageMedia.fromUrl(trayIconUrl, {
+            unsafeMime: true,
+        });
+
+        await client.sendMessage(msg.from, medias, {
+            sendMediaAsStickerPack: true,
+            stickerPackName: 'WWebJS Pack',
+            stickerPackPublisher: 'whatsapp-web.js',
+            stickerPackTrayIcon: trayIcon,
+        });
     } else if (msg.body === '!isviewonce' && msg.hasQuotedMsg) {
         const quotedMsg = await msg.getQuotedMessage();
         if (quotedMsg.hasMedia) {
