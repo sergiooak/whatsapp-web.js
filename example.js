@@ -281,6 +281,29 @@ client.on('message', async (msg) => {
                 sendAudioAsVoice: true,
             });
         }
+    } else if (msg.body === '!pack' && (msg.hasQuotedMsg || msg.hasMedia)) {
+        const medias = [];
+
+        if (msg.hasQuotedMsg) {
+            const quotedMsg = await msg.getQuotedMessage();
+            if (quotedMsg.hasMedia) {
+                const media = await quotedMsg.downloadMedia();
+                if (media) medias.push(media);
+            }
+        }
+
+        if (msg.hasMedia) {
+            const media = await msg.downloadMedia();
+            if (media) medias.push(media);
+        }
+
+        if (medias.length) {
+            await client.sendMessage(msg.from, medias, {
+                sendMediaAsStickerPack: true,
+                stickerPackName: 'WWebJS Pack',
+                stickerPackPublisher: 'whatsapp-web.js',
+            });
+        }
     } else if (msg.body === '!isviewonce' && msg.hasQuotedMsg) {
         const quotedMsg = await msg.getQuotedMessage();
         if (quotedMsg.hasMedia) {
