@@ -1,7 +1,11 @@
+const path = require('path');
+
 const { Client, Location, Poll, List, Buttons, LocalAuth } = require('./index');
 
+const authClientId = process.env.WWEBJS_CLIENT_ID || 'real';
+
 const client = new Client({
-    authStrategy: new LocalAuth(),
+    authStrategy: new LocalAuth({ clientId: authClientId }),
     // proxyAuthentication: { username: 'username', password: 'password' },
     /**
      * This option changes the browser name from defined in user agent to custom.
@@ -24,6 +28,16 @@ const client = new Client({
     //     intervalMs: 180000 // Time to renew pairing code in milliseconds, defaults to 3 minutes
     // }
 });
+
+if (process.env.WWEBJS_CAPTURE_MESSAGES !== '0') {
+    const { attach: attachMessageCapture } = require('./tools/messageCapture');
+    const captureLabel =
+        process.env.WWEBJS_CAPTURE_LABEL || authClientId || 'default';
+    attachMessageCapture(client, {
+        label: captureLabel,
+        outputDir: path.join(process.cwd(), 'message-logs', captureLabel),
+    });
+}
 
 // client initialize does not finish at ready now.
 client.initialize();
@@ -65,6 +79,8 @@ client.on('ready', async () => {
 
 client.on('message', async (msg) => {
     console.log('MESSAGE RECEIVED', msg);
+
+    if (process.env.WWEBJS_CAPTURE_ONLY === '1') return;
 
     if (msg.body === '!ping reply') {
         // Send a new message as a reply to the current one
