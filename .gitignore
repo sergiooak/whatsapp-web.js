@@ -75,9 +75,6 @@ typings/
 # local version cache
 .wwebjs_cache/
 
-# message capture dumps (tools/messageCapture.js)
-message-logs/
-
 # IDE's
 .idea
 .vscode
