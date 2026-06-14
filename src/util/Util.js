@@ -247,6 +247,7 @@ class Util {
      * @param {string} [metadata.id]
      * @param {string[]} [metadata.categories]
      * @param {?MessageMedia} [metadata.trayIcon]
+     * @param {?MessageMedia} [metadata.thumbnail] - Custom card preview image (overrides auto-generated grid)
      * @param {import('puppeteer').Page} pupPage
      * @returns {Promise<Object>}
      */
@@ -333,27 +334,36 @@ class Util {
             trayIconSource,
         );
         trayIcon.filename = trayIconFileName;
-        const thumbnail = await pupPage.evaluate(
-            (mediaList) =>
-                window.WWebJS.createStickerPackPreview(mediaList, {
-                    mimetype: 'image/jpeg',
-                    size: 252,
-                    stickerSize: 104,
-                    quality: 0.79,
-                }),
-            stickers.map((sticker) => ({
-                mimetype: 'image/webp',
-                data: sticker.buffer.toString('base64'),
-                filename: sticker.fileName,
-            })),
-        );
+        let thumbnail;
+        if (metadata.thumbnail) {
+            thumbnail = await pupPage.evaluate(
+                (media) =>
+                    window.WWebJS.cropAndResizeImage(media, {
+                        mimetype: 'image/jpeg',
+                        size: 252,
+                        quality: 0.79,
+                    }),
+                metadata.thumbnail,
+            );
+        } else {
+            thumbnail = await pupPage.evaluate(
+                (mediaList) =>
+                    window.WWebJS.createStickerPackPreview(mediaList, {
+                        mimetype: 'image/jpeg',
+                        size: 252,
+                        quality: 0.79,
+                    }),
+                stickers.map((sticker) => ({
+                    mimetype: 'image/webp',
+                    data: sticker.buffer.toString('base64'),
+                    filename: sticker.fileName,
+                })),
+            );
+        }
         thumbnail.filename = `${stickerPackId}.jpg`;
 
         const trayIconBuffer = Buffer.from(trayIcon.data, 'base64');
         const thumbnailBuffer = Buffer.from(thumbnail.data, 'base64');
-        const imageDataHash = Crypto.createHash('sha256')
-            .update(thumbnailBuffer)
-            .digest('hex');
         const stickerPackSize =
             trayIconBuffer.length +
             stickers.reduce(
@@ -389,11 +399,7 @@ class Util {
             stickerPackPublisher,
             stickerPackDescription: '',
             stickerPackSize,
-            stickerPackOrigin: 1,
             trayIconFileName,
-            thumbnailHeight: 252,
-            thumbnailWidth: 252,
-            imageDataHash,
             stickers: stickers.map((sticker) => ({
                 fileName: sticker.fileName,
                 emojis: sticker.emojis,

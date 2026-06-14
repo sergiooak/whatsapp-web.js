@@ -1374,8 +1374,8 @@ class Client extends EventEmitter {
      * @property {string} [stickerPackName=undefined] - Sets the name of the sticker pack, (if sendMediaAsStickerPack is true).
      * @property {string} [stickerPackPublisher=undefined] - Sets the publisher of the sticker pack, (if sendMediaAsStickerPack is true).
      * @property {string} [stickerPackId=undefined] - Sets the ID of the sticker pack, (if sendMediaAsStickerPack is true).
-     * @property {?MessageMedia} [stickerPackTrayIcon=undefined] - Sets the tray icon of the sticker pack, (if sendMediaAsStickerPack is true).
-     * @property {?MessageMedia} [stickerPackThumbnail=undefined] - Alias for stickerPackTrayIcon.
+     * @property {?MessageMedia} [stickerPackTrayIcon=undefined] - Sets the tray icon of the sticker pack; if omitted, WhatsApp uses the first sticker (if sendMediaAsStickerPack is true).
+     * @property {?MessageMedia} [stickerPackThumbnail=undefined] - Sets a custom chat card preview image; if omitted, a grid preview is generated from the stickers (if sendMediaAsStickerPack is true).
      * @property {boolean} [ignoreQuoteErrors = true] - Should the bot send a quoted message without the quoted message if it fails to get the quote?
      * @property {boolean} [waitUntilMsgSent = false] - Should the bot wait for the message send result?
      * @property {MessageMedia} [media] - Media to be sent
@@ -1539,10 +1539,8 @@ class Client extends EventEmitter {
                 );
             }
 
-            const stickerPackTrayIcon =
-                options.stickerPackTrayIcon !== undefined
-                    ? options.stickerPackTrayIcon
-                    : options.stickerPackThumbnail;
+            const stickerPackTrayIcon = options.stickerPackTrayIcon;
+            const stickerPackThumbnail = options.stickerPackThumbnail;
 
             if (
                 stickerPackTrayIcon !== undefined &&
@@ -1559,6 +1557,21 @@ class Client extends EventEmitter {
                 throw new Error('stickerPackTrayIcon must be an image');
             }
 
+            if (
+                stickerPackThumbnail !== undefined &&
+                stickerPackThumbnail !== null &&
+                !(stickerPackThumbnail instanceof MessageMedia)
+            ) {
+                throw new Error('stickerPackThumbnail must be a MessageMedia');
+            }
+
+            if (
+                stickerPackThumbnail &&
+                !stickerPackThumbnail.mimetype.includes('image')
+            ) {
+                throw new Error('stickerPackThumbnail must be an image');
+            }
+
             internalOptions.stickerPack = await Util.formatToWebpStickerPack(
                 content,
                 {
@@ -1567,6 +1580,7 @@ class Client extends EventEmitter {
                     id: options.stickerPackId,
                     categories: options.stickerCategories,
                     trayIcon: stickerPackTrayIcon,
+                    thumbnail: stickerPackThumbnail,
                 },
                 this.pupPage,
             );

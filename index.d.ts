@@ -1595,9 +1595,9 @@ declare namespace WAWebJS {
         stickerPackPublisher?: string;
         /** Sticker pack id, if sendMediaAsStickerPack is true */
         stickerPackId?: string;
-        /** Sticker pack tray icon, if sendMediaAsStickerPack is true */
+        /** Sticker pack tray icon; if omitted, WhatsApp uses the first sticker, if sendMediaAsStickerPack is true */
         stickerPackTrayIcon?: MessageMedia | null;
-        /** Alias for stickerPackTrayIcon */
+        /** Custom chat card preview image; if omitted, a grid preview is generated from the stickers, if sendMediaAsStickerPack is true */
         stickerPackThumbnail?: MessageMedia | null;
         /** Should the bot send a quoted message without the quoted message if it fails to get the quote?
          * @default true (enabled) */
