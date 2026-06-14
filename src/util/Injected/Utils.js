@@ -151,7 +151,14 @@ exports.LoadUtils = () => {
         const { findLink } = window.require('WALinkify');
 
         let mediaOptions = {};
-        if (options.media) {
+        if (options.stickerPack) {
+            mediaOptions = await window.WWebJS.processStickerPackData(
+                options.stickerPack,
+            );
+            content = undefined;
+            delete options.stickerPack;
+            delete options.sendMediaAsStickerPack;
+        } else if (options.media) {
             mediaOptions =
                 options.sendMediaAsSticker && !isChannel && !isStatus
                     ? await window.WWebJS.processStickerData(options.media)
@@ -678,6 +685,64 @@ exports.LoadUtils = () => {
         };
 
         return stickerInfo;
+    };
+
+    window.WWebJS.processStickerPackData = async (stickerPackInfo) => {
+        const file = window.WWebJS.mediaInfoToFile(stickerPackInfo.media);
+        const thumbnail = window.WWebJS.mediaInfoToFile(
+            stickerPackInfo.thumbnail,
+        );
+        const filehash = await window.WWebJS.getFileHash(file);
+        const thumbnailSha256 = await window.WWebJS.getFileHash(thumbnail);
+        const mediaKey = await window.WWebJS.generateHash(32);
+        const uploadStickerPack = (blob) => {
+            const controller = new AbortController();
+
+            return window.require('WAWebUploadManager').encryptAndUpload({
+                blob,
+                type: 'sticker-pack',
+                signal: controller.signal,
+                mediaKey,
+                uploadQpl: window
+                    .require('WAWebStartMediaUploadQpl')
+                    .startMediaUploadQpl({
+                        entryPoint: 'MediaUpload',
+                    }),
+            });
+        };
+
+        const [uploadedInfo, thumbnailInfo] = await Promise.all([
+            uploadStickerPack(file),
+            uploadStickerPack(thumbnail),
+        ]);
+
+        return {
+            directPath: uploadedInfo.directPath,
+            encFilehash: uploadedInfo.encFilehash,
+            filehash,
+            mediaKey: uploadedInfo.mediaKey || mediaKey,
+            mediaKeyTimestamp: uploadedInfo.mediaKeyTimestamp,
+            size: file.size,
+            type: 'sticker-pack',
+            filename: stickerPackInfo.stickerPackName,
+            stickerPackId: stickerPackInfo.stickerPackId,
+            name: stickerPackInfo.stickerPackName,
+            publisher: stickerPackInfo.stickerPackPublisher,
+            stickerPackPublisher: stickerPackInfo.stickerPackPublisher,
+            packDescription: stickerPackInfo.stickerPackDescription,
+            stickerPackSize: stickerPackInfo.stickerPackSize,
+            stickerPackOrigin: stickerPackInfo.stickerPackOrigin,
+            stickers: stickerPackInfo.stickers,
+            trayIconFileName: stickerPackInfo.trayIconFileName,
+            thumbnailDirectPath: thumbnailInfo.directPath,
+            thumbnailEncSha256: thumbnailInfo.encFilehash,
+            thumbnailSha256,
+            thumbnailHeight: stickerPackInfo.thumbnailHeight,
+            thumbnailWidth: stickerPackInfo.thumbnailWidth,
+            imageDataHash: stickerPackInfo.imageDataHash,
+            notifyName: window.require('WAWebConnModel').Conn.pushname || '',
+            messageSecret: window.crypto.getRandomValues(new Uint8Array(32)),
+        };
     };
 
     window.WWebJS.processMediaData = async (
@@ -1328,6 +1393,90 @@ exports.LoadUtils = () => {
             mimetype: options.mimetype,
             data: dataUrl.replace(`data:${options.mimetype};base64,`, ''),
         });
+    };
+
+    window.WWebJS.createStickerPackPreview = async (
+        mediaList,
+        options = {},
+    ) => {
+        if (!Array.isArray(mediaList) || !mediaList.length) {
+            throw new Error('Sticker pack preview requires media');
+        }
+
+        options = Object.assign(
+            {
+                size: 252,
+                stickerSize: 104,
+                mimetype: 'image/jpeg',
+                quality: 0.79,
+            },
+            options,
+        );
+
+        const loadImage = (media) =>
+            new Promise((resolve, reject) => {
+                const img = new Image();
+                img.onload = () => resolve(img);
+                img.onerror = reject;
+                img.src = `data:${media.mimetype};base64,${media.data}`;
+            });
+
+        const images = await Promise.all(
+            mediaList.slice(0, 4).map((media) => loadImage(media)),
+        );
+        const canvas = document.createElement('canvas');
+        canvas.width = options.size;
+        canvas.height = options.size;
+
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, options.size, options.size);
+
+        const center = (options.size - options.stickerSize) / 2;
+        const edge = options.size - options.stickerSize;
+        const positions = {
+            1: [{ x: center, y: center }],
+            2: [
+                { x: 0, y: center },
+                { x: edge, y: center },
+            ],
+            3: [
+                { x: 0, y: 0 },
+                { x: edge, y: 0 },
+                { x: center, y: edge },
+            ],
+            4: [
+                { x: 0, y: 0 },
+                { x: edge, y: 0 },
+                { x: 0, y: edge },
+                { x: edge, y: edge },
+            ],
+        }[images.length];
+
+        images.forEach((img, index) => {
+            const ratio = Math.min(
+                options.stickerSize / img.width,
+                options.stickerSize / img.height,
+            );
+            const width = img.width * ratio;
+            const height = img.height * ratio;
+            const { x, y } = positions[index];
+
+            ctx.drawImage(
+                img,
+                x + (options.stickerSize - width) / 2,
+                y + (options.stickerSize - height) / 2,
+                width,
+                height,
+            );
+        });
+
+        const dataUrl = canvas.toDataURL(options.mimetype, options.quality);
+
+        return {
+            mimetype: options.mimetype,
+            data: dataUrl.replace(`data:${options.mimetype};base64,`, ''),
+        };
     };
 
     window.WWebJS.setPicture = async (chatId, media) => {
