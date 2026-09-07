@@ -4,7 +4,6 @@ const path = require('path');
 const Crypto = require('crypto');
 const { tmpdir } = require('os');
 const { PassThrough } = require('stream');
-const archiver = require('archiver');
 const ffmpeg = require('fluent-ffmpeg');
 const webp = require('node-webpmux');
 const fs = require('fs').promises;
@@ -241,6 +240,14 @@ class Util {
      * @private
      */
     static _zip(entries) {
+        let archiver;
+        try {
+            archiver = require('archiver');
+        } catch {
+            throw new Error(
+                'sendMediaAsStickerPack requires the optional "archiver" package. Install it with: npm install archiver',
+            );
+        }
         return new Promise((resolve, reject) => {
             const archive = archiver('zip', { zlib: { level: 9 } });
             const stream = new PassThrough();
