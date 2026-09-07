@@ -287,13 +287,13 @@ client.on('message', async (msg) => {
             });
         }
     } else if (msg.body === '!pack') {
-        // Sample stickers shipped with the repository (example-assets/stickers).
         // TODO: point to wwebjs/whatsapp-web.js/main once this PR is merged.
-        const base =
-            'https://raw.githubusercontent.com/sergiooak/whatsapp-web.js/feat/sticker-pack/example-assets/stickers';
-        const urls = ['circle', 'square', 'triangle', 'hexagon'].map(
-            (name) => `${base}/${name}.webp`,
-        );
+        const urls = [
+            'https://raw.githubusercontent.com/sergiooak/whatsapp-web.js/feat/sticker-pack/example-assets/stickers/circle.webp',
+            'https://raw.githubusercontent.com/sergiooak/whatsapp-web.js/feat/sticker-pack/example-assets/stickers/square.webp',
+            'https://raw.githubusercontent.com/sergiooak/whatsapp-web.js/feat/sticker-pack/example-assets/stickers/triangle.webp',
+            'https://raw.githubusercontent.com/sergiooak/whatsapp-web.js/feat/sticker-pack/example-assets/stickers/hexagon.webp',
+        ];
 
         const stickers = await Promise.all(
             urls.map((url) => MessageMedia.fromUrl(url)),
