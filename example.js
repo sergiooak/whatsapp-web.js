@@ -1,3 +1,4 @@
+const fs = require('fs');
 const {
     Client,
     Location,
@@ -241,6 +242,18 @@ client.on('message', async (msg) => {
             Platform: ${info.platform}
         `,
         );
+    } else if (msg.body === '!streamdownload' && msg.hasMedia) {
+        const result = await msg.downloadMediaStream();
+        if (result) {
+            const filePath = `./${result.filename || 'download'}`;
+            const writeStream = fs.createWriteStream(filePath);
+            result.stream.pipe(writeStream);
+            writeStream.on('finish', () => {
+                msg.reply(
+                    `Media saved to ${filePath} (${result.mimetype}, ${result.filesize} bytes)`,
+                );
+            });
+        }
     } else if (msg.body === '!mediainfo' && msg.hasMedia) {
         const attachmentData = await msg.downloadMedia();
         msg.reply(`
