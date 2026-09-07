@@ -287,19 +287,16 @@ client.on('message', async (msg) => {
             });
         }
     } else if (msg.body === '!pack') {
-        const urls = [
-            'https://sticker-ly-api.sergiooak.com.br/file/sticker_pack/MGU8sA927ahRF7KMT9dluA/PTHH2U/42/-588087217.png',
-            'https://sticker-ly-api.sergiooak.com.br/file/sticker_pack/MGU8sA927ahRF7KMT9dluA/PTHH2U/42/-318328813.png',
-            'https://sticker-ly-api.sergiooak.com.br/file/sticker_pack/MGU8sA927ahRF7KMT9dluA/PTHH2U/42/-1069240662.png',
-            'https://sticker-ly-api.sergiooak.com.br/file/sticker_pack/MGU8sA927ahRF7KMT9dluA/PTHH2U/42/-1062658684.png',
-            'https://sticker-ly-api.sergiooak.com.br/file/sticker_pack/MGU8sA927ahRF7KMT9dluA/PTHH2U/42/-324740484.png',
-            'https://sticker-ly-api.sergiooak.com.br/file/sticker_pack/MGU8sA927ahRF7KMT9dluA/PTHH2U/42/-294350008.png',
-            'https://sticker-ly-api.sergiooak.com.br/file/sticker_pack/MGU8sA927ahRF7KMT9dluA/PTHH2U/42/-261131050.png',
-            'https://sticker-ly-api.sergiooak.com.br/file/sticker_pack/MGU8sA927ahRF7KMT9dluA/PTHH2U/42/-232537276.png',
-        ];
+        // Sample stickers shipped with the repository (example-assets/stickers).
+        // TODO: point to wwebjs/whatsapp-web.js/main once this PR is merged.
+        const base =
+            'https://raw.githubusercontent.com/sergiooak/whatsapp-web.js/feat/sticker-pack/example-assets/stickers';
+        const urls = ['circle', 'square', 'triangle', 'hexagon'].map(
+            (name) => `${base}/${name}.webp`,
+        );
 
         const stickers = await Promise.all(
-            urls.map((url) => MessageMedia.fromUrl(url, { unsafeMime: true })),
+            urls.map((url) => MessageMedia.fromUrl(url)),
         );
 
         await client.sendMessage(msg.from, stickers, {
